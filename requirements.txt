@@ -1,2 +1,5 @@
 streamlit
 openai
+sqlite3
+os
+datetime
