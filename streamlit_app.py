@@ -13,6 +13,11 @@ if not api_key:
 # Instantiate a client using the new API (this is the recommended approach per the migration guide)
 client = OpenAI(api_key=api_key)
 
+if not api_key:
+    st.error("Please set your OPENAI_API_KEY environment variable.")
+# Instantiate the client using the new API
+client = OpenAI(api_key=api_key)
+
 # ---------------------------
 # Database Setup and Helper Functions
 # ---------------------------
@@ -93,7 +98,7 @@ def call_agent_input(messages):
     )
     conversation = [{"role": "system", "content": system_prompt}] + messages
     response = client.chat.completions.create(
-        model="gpt-4",  # or use "gpt-3.5-turbo" as needed
+        model="gpt-4",  # or "gpt-3.5-turbo" as desired
         messages=conversation,
         temperature=0.7,
         max_tokens=300
@@ -102,11 +107,11 @@ def call_agent_input(messages):
 
 def call_agent_notes(agent_input_history, anamnesis_format):
     """
-    Agent_Notes: Organize all gathered case details into notes in either "Traditional Anamnesis" or "SOAP Notes" format.
+    Agent_Notes: Organize the collected case details into medical notes in the specified format.
     """
     system_prompt = (
         f"You are a medical note-taking assistant. Based on the conversation below regarding the patient's case, "
-        f"produce an organized set of medical notes in the {anamnesis_format} format. Include all relevant patient information."
+        f"produce organized medical notes in the {anamnesis_format} format. Include all relevant patient details."
     )
     conversation = [{"role": "system", "content": system_prompt}] + agent_input_history
     response = client.chat.completions.create(
@@ -119,12 +124,11 @@ def call_agent_notes(agent_input_history, anamnesis_format):
 
 def call_agent_diagnosis(agent_input_history, agent_notes_output):
     """
-    Agent_Diagnosis: Provide a list of potential diagnoses with reasoning, differential diagnosis, epidemiology, and treatment suggestions.
+    Agent_Diagnosis: List potential diagnoses with supporting details.
     """
     system_prompt = (
-        "You are a diagnostic reasoning assistant. Based on the patient's case information and the provided notes, "
-        "list potential diagnoses from most likely to least likely. For each diagnosis, include reasons, differential diagnoses, "
-        "epidemiology, and treatment suggestions."
+        "You are a diagnostic reasoning assistant. Based on the patient's case details and the provided notes, "
+        "list potential diagnoses from most likely to least likely. Include reasoning, differential diagnosis, epidemiology, and treatment suggestions."
     )
     conversation = [{"role": "system", "content": system_prompt}] + agent_input_history
     conversation.append({
@@ -144,8 +148,8 @@ def call_agent_conduct(agent_input_history, agent_notes_output, agent_diagnosis_
     Agent_Conduct: Suggest clinical management plans based on the overall case.
     """
     system_prompt = (
-        "You are a clinical management assistant. Based on the patient's case information, the organized notes, "
-        "and the provided diagnosis details, propose a series of suggested clinical management plans."
+        "You are a clinical management assistant. Based on the patient's case details, organized notes, "
+        "and diagnosis information, propose a series of suggested clinical management plans."
     )
     conversation = [{"role": "system", "content": system_prompt}] + agent_input_history
     conversation.append({
@@ -223,12 +227,11 @@ def main():
     user_input = st.text_input("Enter your message (type 'READY' to finish data collection):", key="chat_input")
     if st.button("Send"):
         if user_input:
-            # Append user message and store in DB.
+            # Append user message and store it in the database.
             user_msg = {"role": "user", "content": user_input}
             st.session_state.agent_input_history.append(user_msg)
             add_chat_message(st.session_state.current_patient, "agent_input", "user", user_input)
             
-            # If the physician types READY, finalize data collection.
             if user_input.strip().upper() == "READY":
                 st.info("Finalizing data collection...")
                 final_response = call_agent_input(st.session_state.agent_input_history)
@@ -239,13 +242,13 @@ def main():
                 st.session_state.agent_input_history.append({"role": "assistant", "content": assistant_reply})
                 add_chat_message(st.session_state.current_patient, "agent_input", "assistant", assistant_reply)
             
-            st.experimental_rerun()
+            # Instead of st.experimental_rerun(), force a re-run by updating query parameters.
+            st.experimental_set_query_params(dummy=str(datetime.now()))
 
     # ---------------------------
     # After Data Collection is Finalized – Run Other Agents
     # ---------------------------
     if st.session_state.agent_input_history:
-        # Check if any user message equals READY or if the assistant indicated data collection is sufficient.
         ready_flag = any(msg["content"].strip().upper() == "READY" for msg in st.session_state.agent_input_history if msg["role"] == "user")
         last_assistant = st.session_state.agent_input_history[-1]["content"].lower() if st.session_state.agent_input_history[-1]["role"] == "assistant" else ""
         if ready_flag or "sufficient" in last_assistant:
