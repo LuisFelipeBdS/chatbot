@@ -7,12 +7,7 @@ from openai import OpenAI  # Use the new client instantiation
 # ---------------------------
 # OpenAI API Setup
 # ---------------------------
-api_key = st.secrets.get("OPENAI_API_KEY")
-if not api_key:
-    st.error("Please set your OPENAI_API_KEY environment variable.")
-# Instantiate a client using the new API (this is the recommended approach per the migration guide)
-client = OpenAI(api_key=api_key)
-
+api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     st.error("Please set your OPENAI_API_KEY environment variable.")
 # Instantiate the client using the new API
@@ -242,8 +237,8 @@ def main():
                 st.session_state.agent_input_history.append({"role": "assistant", "content": assistant_reply})
                 add_chat_message(st.session_state.current_patient, "agent_input", "assistant", assistant_reply)
             
-            # Instead of st.experimental_rerun(), force a re-run by updating query parameters.
-            st.experimental_set_query_params(dummy=str(datetime.now()))
+            # Use the new st.query_params() method to force a rerun.
+            st.query_params(dummy=str(datetime.now()))
 
     # ---------------------------
     # After Data Collection is Finalized – Run Other Agents
