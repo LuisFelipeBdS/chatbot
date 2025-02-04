@@ -237,8 +237,8 @@ def main():
                 st.session_state.agent_input_history.append({"role": "assistant", "content": assistant_reply})
                 add_chat_message(st.session_state.current_patient, "agent_input", "assistant", assistant_reply)
             
-            # Use the new st.query_params() method to force a rerun.
-            st.query_params(dummy=str(datetime.now()))
+            # Use the new st.set_query_params() function to force a rerun.
+            st.set_query_params(dummy=str(datetime.now()))
 
     # ---------------------------
     # After Data Collection is Finalized – Run Other Agents
