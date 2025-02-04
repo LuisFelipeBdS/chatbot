@@ -238,7 +238,7 @@ def main():
                 add_chat_message(st.session_state.current_patient, "agent_input", "assistant", assistant_reply)
             
             # FIXED: Use experimental_rerun instead of set_query_params
-            st.experimental_rerun()
+            st.rerun()
 
     # ---------------------------
     # After Data Collection is Finalized – Run Other Agents
@@ -267,7 +267,7 @@ def main():
             agent_conduct_output = call_agent_conduct(st.session_state.agent_input_history, agent_notes_output, agent_diagnosis_output)
             st.write(agent_conduct_output)
             add_chat_message(st.session_state.current_patient, "agent_conduct", "assistant", agent_conduct_output)
-
+            
     # ---------------------------
     # Optional: Display Chat History
     # ---------------------------
