@@ -1,4 +1,5 @@
 import streamlit as st
+import google.generativeai as genai
 import pandas as pd
 import datetime
 import json
@@ -80,35 +81,59 @@ local_css()
 # Função para consultar a API do Gemini (será usada quando necessário)
 def consultar_gemini(prompt, api_key):
     """
-    Função para consultar a API do Gemini
+    Função para consultar a API do Gemini usando a biblioteca oficial.
     """
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent"
-    
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    data = {
-        "contents": [
-            {
-                "parts": [
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
+    if not api_key:
+        return "Erro: API Key do Gemini não fornecida."
+
+    try:
+        # Configura a API Key
+        genai.configure(api_key=api_key)
+
+        # Configurações de geração (opcional, ajuste conforme necessário)
+        generation_config = {
+            "temperature": 0.7,
+            "top_p": 1,
+            "top_k": 1,
+            "max_output_tokens": 2048, # Ajuste se precisar de respostas mais longas/curtas
+        }
+
+        # Configurações de segurança (opcional, ajuste os níveis)
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
         ]
-    }
-    
-    # Adicionar a chave API como parâmetro na URL
-    full_url = f"{url}?key={api_key}"
-    
-    response = requests.post(full_url, headers=headers, json=data)
-    
-    if response.status_code == 200:
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    else:
-        return f"Erro ao consultar a API: {response.status_code} - {response.text}"
+
+        # Inicializa o modelo
+        # Use 'gemini-1.5-flash' ou 'gemini-1.5-pro' se preferir e tiver acesso
+        model = genai.GenerativeModel(model_name="gemini-pro", # ou "gemini-1.0-pro"
+                                      generation_config=generation_config,
+                                      safety_settings=safety_settings)
+
+        # Gera o conteúdo
+        response = model.generate_content(prompt)
+
+        # Verifica se a resposta foi bloqueada por segurança
+        if not response.candidates:
+             # Tenta obter informações sobre o bloqueio, se disponíveis
+            block_reason = "desconhecido"
+            try:
+                if response.prompt_feedback and response.prompt_feedback.block_reason:
+                    block_reason = response.prompt_feedback.block_reason.name
+            except Exception:
+                pass # Ignora erros ao tentar obter o motivo do bloqueio
+            return f"Erro: A resposta foi bloqueada por filtros de segurança (Motivo: {block_reason}). Tente reformular o prompt."
+
+        # Retorna o texto da resposta
+        # A biblioteca lida com a extração do texto corretamente
+        return response.text
+
+    except Exception as e:
+        # Captura erros gerais da API ou da biblioteca
+        st.error(f"Ocorreu um erro ao consultar a API do Gemini: {e}") # Mostra o erro no Streamlit
+        return f"Erro ao consultar a API do Gemini: {str(e)}"
 
 # Função para calcular o risco cirúrgico baseado nas respostas
 def calcular_risco_cirurgico(respostas):
@@ -202,11 +227,11 @@ def gerar_recomendacoes(respostas, risco, api_key=None):
     Gera recomendações personalizadas com base nas respostas e no risco calculado
     """
     recomendacoes = []
-    
+
     # Recomendações baseadas na idade
     if respostas['idade'] >= 70:
         recomendacoes.append("Considere uma avaliação geriátrica pré-operatória.")
-    
+
     # Recomendações baseadas em comorbidades
     for comorbidade in respostas['comorbidades']:
         if comorbidade == 'Diabetes descompensada':
@@ -215,46 +240,54 @@ def gerar_recomendacoes(respostas, risco, api_key=None):
             recomendacoes.append("Sua pressão arterial deve ser controlada antes do procedimento. Continue tomando seus medicamentos conforme orientação médica.")
         elif comorbidade == 'Insuficiência cardíaca':
             recomendacoes.append("Mantenha-se em dia com suas medicações cardíacas e informe a equipe médica sobre todos os sintomas recentes.")
-    
+
     # Recomendações baseadas no uso de medicamentos
     if respostas['usa_anticoagulantes']:
         recomendacoes.append("Você precisará interromper o uso de anticoagulantes antes da cirurgia. Consulte seu médico para um plano de interrupção segura.")
-    
+
     # Recomendações baseadas no risco
     if risco == "Alto":
         recomendacoes.append("Seu risco cirúrgico é elevado. É altamente recomendável uma avaliação cardiológica completa antes do procedimento.")
     elif risco == "Médio":
         recomendacoes.append("Seu risco cirúrgico é moderado. Considere realizar exames pré-operatórios adicionais conforme orientação médica.")
-    
+
     # Se tiver API key do Gemini, pode personalizar ainda mais as recomendações
     if api_key:
-        try:
-            prompt = f"""
-            Com base no paciente com as seguintes características:
-            - Idade: {respostas['idade']} anos
-            - Comorbidades: {', '.join(respostas['comorbidades']) if respostas['comorbidades'] else 'Nenhuma'}
-            - Classificação ASA: {respostas['asa']}
-            - Usa anticoagulantes: {'Sim' if respostas['usa_anticoagulantes'] else 'Não'}
-            - Usa corticoides: {'Sim' if respostas['uso_corticoides'] else 'Não'}
-            - Tipo de cirurgia: {respostas['tipo_cirurgia']}
-            - Complexidade da cirurgia: {respostas['complexidade_cirurgia']}
-            
-            Forneça 3 recomendações específicas para este paciente no período pré-operatório, considerando que seu risco cirúrgico foi classificado como {risco}.
-            Dê recomendações objetivas e práticas, sem introduções ou conclusões.
-            """
-            
-            recomendacoes_ia = consultar_gemini(prompt, api_key)
+        prompt = f"""
+        Com base no paciente com as seguintes características:
+        - Idade: {respostas['idade']} anos
+        - Comorbidades: {', '.join(respostas['comorbidades']) if respostas['comorbidades'] else 'Nenhuma'}
+        - Classificação ASA: {respostas['asa']}
+        - Usa anticoagulantes: {'Sim' if respostas['usa_anticoagulantes'] else 'Não'}
+        - Usa corticoides: {'Sim' if respostas['uso_corticoides'] else 'Não'}
+        - Tipo de cirurgia: {respostas['tipo_cirurgia']}
+        - Complexidade da cirurgia: {respostas['complexidade_cirurgia']}
+
+        Forneça 3 recomendações específicas e concisas para este paciente no período pré-operatório, considerando que seu risco cirúrgico foi classificado como {risco}.
+        As recomendações devem ser práticas e diretas ao ponto, sem introduções, conclusões ou formatação especial (como marcadores ou numeração). Cada recomendação deve estar em uma linha separada.
+        Exemplo de formato:
+        Recomendação 1 aqui.
+        Recomendação 2 aqui.
+        Recomendação 3 aqui.
+        """
+
+        resultado_ia = consultar_gemini(prompt, api_key)
+
+        # Verifica se a consulta à IA foi bem-sucedida e não retornou uma mensagem de erro
+        if resultado_ia and not resultado_ia.startswith("Erro:"):
             # Processar e adicionar as recomendações da IA
-            for linha in recomendacoes_ia.strip().split('\n'):
-                if linha and not linha.startswith('Recomendações:'):
-                    # Remover numeração e pontos se existirem
-                    linha_limpa = ' '.join(linha.split('. ')[1:]) if '. ' in linha else linha
-                    linha_limpa = linha_limpa.strip('- ').strip()
-                    if linha_limpa and len(linha_limpa) > 10:  # Verificar se é uma recomendação válida
-                        recomendacoes.append(linha_limpa)
-        except Exception as e:
-            recomendacoes.append(f"Não foi possível gerar recomendações personalizadas adicionais. Erro: {str(e)}")
-    
+            linhas_ia = resultado_ia.strip().split('\n')
+            count = 0
+            for linha in linhas_ia:
+                linha_limpa = linha.strip()
+                if linha_limpa and len(linha_limpa) > 10 and count < 3: # Adiciona apenas as 3 primeiras recomendações válidas
+                    recomendacoes.append(linha_limpa)
+                    count += 1
+        elif resultado_ia: # Se começou com "Erro:", adiciona a mensagem de erro como informação
+             recomendacoes.append(f"Info IA: {resultado_ia}")
+        else: # Caso inesperado de resultado vazio
+            recomendacoes.append("Info IA: Não foi possível obter recomendações adicionais da IA.")
+
     return recomendacoes
 
 # Função para gerar um PDF de relatório
