@@ -108,7 +108,7 @@ def consultar_gemini(prompt, api_key):
 
         # Inicializa o modelo
         # Use 'gemini-1.5-flash' ou 'gemini-1.5-pro' se preferir e tiver acesso
-        model = genai.GenerativeModel(model_name="gemini-pro", # ou "gemini-1.0-pro"
+        model = genai.GenerativeModel(model_name="gemini-2.5-pro-exp-03-25", # ou "gemini-1.0-pro"
                                       generation_config=generation_config,
                                       safety_settings=safety_settings)
 
