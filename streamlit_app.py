@@ -389,7 +389,7 @@ def main():
         st.header("⚙️ Configurações")
         api_key = st.text_input("API Key do Gemini (opcional)", type="password")
         st.write("---")
-        st.write("Desenvolvido com ❤️ para auxílio pré-operatório")
+        st.write("Protótipo em desenvolvimento")
     
     # Abas da aplicação
     tab1, tab2, tab3 = st.tabs(["📋 Avaliação de Risco", "ℹ️ Informações", "❓ Dúvidas Frequentes"])
